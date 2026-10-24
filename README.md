@@ -92,6 +92,20 @@ No credentials or secrets belong in this variable. For the API, open <http://127
 
 If port 3000 is already occupied, Next.js selects another port and prints the address to open. Keep that terminal running while using the dashboard.
 
+## Deploy the backend to Render
+
+Create a Render **Web Service** from this repository and set its **Root Directory** to `backend`. Render's web services must bind to `0.0.0.0`; the recommended port is the service's `PORT` environment variable ([Render web-service port configuration](https://render.com/docs/web-services)). Use:
+
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Health check path:** `/api/health`
+
+Render supplies `PORT`; the start command binds Uvicorn to all interfaces and uses that port. Set `FRONTEND_ORIGIN` in the Render service environment to the deployed frontend's exact origin, for example `https://<your-frontend-host>` (scheme and host only, with an optional port). TRACE rejects wildcards, credentials, paths, query strings, fragments, comma-separated origins, and non-HTTPS origins outside localhost. Both `http://localhost:3000` and `http://127.0.0.1:3000` remain allowed for local development. Do not set `FRONTEND_ORIGIN` to an API URL.
+
+Set `NEXT_PUBLIC_API_URL` in the frontend hosting environment to the deployed API origin, such as `https://<your-backend-host>`; the local default is only for local development. These hostnames are placeholders, not deployment defaults.
+
+`GET /api/health` is a lightweight process check and does not contact OpenF1. It can be configured as Render's [HTTP health-check path](https://render.com/docs/health-checks). A healthy response does not establish that OpenF1 is reachable or that comparison requests will succeed. Provider rate limits, upstream availability, historical-data terms, and the unresolved FastF1 access issue remain deployment limitations; this configuration alone does not make TRACE production-ready.
+
 ## Data sources and methodology
 
 The comparison workflow uses OpenF1's historical `/meetings`, `/sessions`, `/drivers`, `/laps`, and `/car_data` endpoints. The backend joins returned meetings and sessions by provider `meeting_key` and uses the stable `session_key` for selected-session requests. OpenF1 documents free historical access from 2023 onward; access and returned data are subject to provider availability and terms. FastF1 is retained for a separate historical adapter/diagnostic path, but it is not used by the current comparison endpoints; its previously observed Formula 1 archive HTTP 401 and mirror HTTP 404 remain unresolved. See the detailed [data-validation record](docs/data-validation.md).
