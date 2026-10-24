@@ -1,100 +1,138 @@
-# TRACE — F1 telemetry, decoded.
+# TRACE — Telemetry & Race Analysis for Competitive Engineering
 
-TRACE is a historical Formula 1 telemetry comparison workspace. The project is being built in milestones, with real data and verified calculations required before a comparison is shown as successful.
+**Explore historical Formula 1 telemetry and compare drivers' recorded candidate laps.** TRACE is a locally run analysis platform that turns timing and car-data samples into an interactive, clearly qualified comparison.
 
-## Current milestone
+## Screenshots
 
-Milestone 7 verifies the dynamic workflow across multiple real sessions and adds optional explicit candidate-lap selection. Meeting/session and driver choices come from OpenF1 metadata; lap choices are loaded for the selected session and driver pair. See [`docs/data-validation.md`](docs/data-validation.md) for exact live and offline validation evidence and limitations.
+The images below show the locally running TRACE dashboard and its historical comparison workflow.
 
-## Stack
+![TRACE dashboard with historical session and driver selectors](docs/screenshots/dashboard.png)
 
-- Frontend: Next.js App Router, React, TypeScript.
-- Backend: FastAPI, served by Uvicorn.
-- Historical data: OpenF1 for the current API workflow; FastF1 remains as a separate diagnostic and historical-data adapter.
+*Dashboard overview and session/driver selection.*
 
-## Local setup
+![TRACE candidate-lap comparison cards](docs/screenshots/driver-comparison.png)
 
-Prerequisites: Node.js 20.9 or newer and Python 3.10 or newer.
+*Selected candidate lap times and sector summaries for both drivers.*
 
-Install the frontend dependencies and start Next.js:
+![TRACE speed telemetry trace and elapsed-time inspector](docs/screenshots/telemetry-trace.png)
+
+*Interactive speed traces with elapsed-time sample inspection.*
+
+![TRACE plain-English comparison insights](docs/screenshots/comparison-insights.png)
+
+*Lap-time explanation and the bounded elapsed-time speed-gap insight.*
+
+## Overview
+
+Motorsport telemetry is detailed and easy to misread without context. TRACE brings historical session discovery, candidate-lap timing, and timestamped car data together in one interface, with plain-English explanations that separate recorded facts from conclusions the data cannot support.
+
+TRACE is intended for F1 fans and developers exploring historical performance data. Its goal is to make comparisons approachable while making data limitations visible. It is an independent project and is not affiliated with Formula 1, the FIA, or any team.
+
+## Features
+
+- Discover provider-returned meetings and sessions by year, then list drivers participating in the selected session.
+- Choose automatic candidate laps or manually select eligible lap numbers when the provider supplies the required timing metadata.
+- Compare recorded lap and sector times, with a clearly defined signed delta.
+- Explore interactive speed traces against elapsed time and inspect each driver's nearest available timestamped sample.
+- Review sample-based minimum, maximum, and mean speed summaries, plus a bounded nearest-sample speed-gap insight.
+- Read concise explanations based on the active API response, with explicit qualifications for missing or unverified data.
+
+Candidate laps are not presented as officially valid laps or personal bests. TRACE currently has no circuit-distance alignment.
+
+## Tech stack
+
+- **Frontend:** Next.js 15 App Router, React 19, TypeScript, and the project's responsive CSS stylesheet.
+- **Backend:** Python 3.10+, FastAPI, and Uvicorn.
+- **Historical provider:** OpenF1 REST API. FastF1 remains a separate adapter and diagnostic tool; its archive access issue is unresolved.
+- **Backend data libraries:** Pydantic (through FastAPI), pandas, NumPy, and HTTPX for provider requests.
+
+The browser renders the dashboard and requests typed JSON from the FastAPI service. The backend discovers sessions, selects candidate laps, fetches car data from OpenF1, and returns normalized comparison results.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[Browser] -->|UI and selections| N[Next.js frontend]
+  N -->|GET /api sessions, drivers, laps, compare| F[FastAPI backend]
+  F -->|Historical REST requests| O[OpenF1]
+  O -->|Session, driver, lap, car-data records| F
+  F -->|Normalized JSON| N
+```
+
+The diagram shows the current historical flow. FastF1 is not the provider used by the comparison API.
+
+## Run locally
+
+Prerequisites: Windows PowerShell, Python 3.10 or newer, and Node.js 20.9 or newer. Use two PowerShell terminals, both opened in the repository root (`D:\TRACE`). No API key is needed for the current historical OpenF1 workflow.
+
+### Terminal 1 — backend
 
 ```powershell
-cd frontend
-npm install
+cd D:\TRACE\backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### Terminal 2 — frontend
+
+```powershell
+cd D:\TRACE\frontend
+npm ci
 npm run dev
 ```
 
-In another PowerShell terminal, create a Python environment, install backend dependencies, and start the API:
+Open <http://localhost:3000>. The frontend uses `NEXT_PUBLIC_API_URL` for its backend origin; it defaults to `http://127.0.0.1:8000`. If you need another API origin, create `frontend/.env.local` with a local value such as:
 
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```dotenv
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 ```
 
-On this Windows environment, Application Control blocks Next.js's native SWC binary. To run a frontend build or dev server here, set Next's WASM fallback before the `npm` command:
+No credentials or secrets belong in this variable. For the API, open <http://127.0.0.1:8000/api/health> and <http://127.0.0.1:8000/docs>. The health endpoint should return `{"status":"ok","service":"trace-api"}`. OpenF1 rate limits can temporarily prevent metadata or comparison requests; wait for the indicated cooldown rather than repeatedly retrying.
+
+If port 3000 is already occupied, Next.js selects another port and prints the address to open. Keep that terminal running while using the dashboard.
+
+## Data sources and methodology
+
+The comparison workflow uses OpenF1's historical `/meetings`, `/sessions`, `/drivers`, `/laps`, and `/car_data` endpoints. The backend joins returned meetings and sessions by provider `meeting_key` and uses the stable `session_key` for selected-session requests. OpenF1 documents free historical access from 2023 onward; access and returned data are subject to provider availability and terms. FastF1 is retained for a separate historical adapter/diagnostic path, but it is not used by the current comparison endpoints; its previously observed Formula 1 archive HTTP 401 and mirror HTTP 404 remain unresolved. See the detailed [data-validation record](docs/data-validation.md).
+
+TRACE's current candidate policy chooses the shortest provider-returned lap with a finite lap duration, three finite sector durations, and an explicit `is_pit_out_lap=false`. Manual options use those same checks, require an unambiguous lap number and a usable timezone-aware start timestamp, and retrieve telemetry for the exact requested lap. These are TRACE's eligibility rules, not proof of official lap validity, a clean lap, or personal-best status. OpenF1 does not provide sufficient validity evidence for TRACE to establish those claims.
+
+The signed timing delta is **driver B's lap time minus driver A's lap time**. A negative value means B's recorded candidate lap is shorter; a positive value means A's is shorter; zero means equal recorded times.
+
+Car-data samples retain their timestamps. Each trace's chart coordinate is elapsed seconds from that trace's first returned telemetry sample; the traces are not circuit-position aligned, and equal elapsed offsets do not establish equal track positions. TRACE does not match rows by index or interpolate the plotted traces. The speed-gap insight checks nearest speed-valid samples within the shared elapsed-time interval and a maximum separation of 0.150 seconds; it is a TRACE heuristic, not a same-position measurement or causal explanation. Speed summaries use finite speed values actually present in each returned telemetry trace and report the number of samples used.
+
+The 2024 British GP qualifying comparison and other session/driver/lap paths have previously been retrieved through the real OpenF1 adapter; see the validation record for exact evidence and dates. Automated tests use mocked provider responses and do not prove current upstream availability. Distance coordinates are not calibrated or used by the dashboard, source freshness is not provided by OpenF1, and provider redistribution terms have not been assessed for public deployment.
+
+The standalone live probe is opt-in. From `D:\TRACE\backend`, run `\.venv\Scripts\python.exe -m scripts.validate_openf1` to resolve and inspect the target through returned metadata, or use `\.venv\Scripts\python.exe -m scripts.validate_openf1 --telemetry-only` to request only the previously identified telemetry windows. The latter reuses known session/lap metadata and is not a fresh metadata validation. Both commands contact OpenF1 and respect the adapter's pacing/retry bounds; do not run them as part of routine tests.
+
+## Testing
+
+Run these from the indicated directories:
 
 ```powershell
-$env:NEXT_TEST_WASM = "1"
-$env:NEXT_TEST_WASM_DIR = (Resolve-Path .\node_modules\@next\swc-wasm-nodejs).Path
-npm run dev # or npm run build
-```
+cd D:\TRACE\backend
+.\.venv\Scripts\python.exe -m pytest -q
 
-This uses Next.js's internal WASM test hook and is only needed where the native compiler is blocked. Standard `npm run dev` and `npm run build` are preferred on normal developer machines.
-
-The API health endpoint is `http://127.0.0.1:8000/api/health`. The frontend checks it on page load. Set `NEXT_PUBLIC_API_URL` if the API runs at a different local address.
-
-The dashboard discovers available meetings and sessions from OpenF1 metadata. Choose a year, then an event/meeting and its session; driver choices are fetched for that session. Discovery endpoints are `GET /api/sessions?year=2024` and `GET /api/drivers?session_key=9554`. The current comparison API accepts stable session identifiers. Example:
-
-```text
-http://127.0.0.1:8000/api/compare?session_key=9554&driver_a=VER&driver_b=NOR
-```
-
-`/api/sessions` joins OpenF1 `/meetings` and `/sessions` by `meeting_key`, preserving the event-versus-session distinction and using provider session keys internally. `/api/drivers` supplies session participants. `/api/compare` validates both identifiers against the chosen session before retrieving candidates and telemetry. The previous `year`, `event`, and `session` query form remains available when both drivers are explicitly supplied; ambiguous matches now ask callers to use a stable session key. There are no fixed driver defaults. `GET /api/laps?session_key=9554&driver_a=VER&driver_b=NOR` returns timing-only lap options for the selected pair without fetching telemetry. Each driver may optionally select a lap independently with `lap_a` and `lap_b` on `/api/compare`; omitted parameters retain automatic selection. Manual options require a finite lap time, all three finite sector times, an explicit non-pit-out flag, a unique lap number, and a timezone-aware lap start timestamp for telemetry retrieval. Automatic selection applies the same finite timing checks. Other provider rows remain visible but disabled with the reason. This TRACE eligibility rule does not establish official validity or personal-best status. Options are fetched only for the active session and driver pair. The JSON comparison response contains session and driver metadata, candidate lap numbers/times/sectors, timestamped samples (`speed_kph`, throttle/brake percentages, gear, DRS status, RPM), sample-based speed summaries, an elapsed-time nearest-sample speed insight, lap-time delta, fetch time, and explicit warnings. `delta_seconds` uses `driver_b - driver_a`: a negative number means driver B's candidate time is faster. `/docs` provides the generated OpenAPI schema.
-
-Candidate selection requires a finite lap duration, three finite sector times, and `is_pit_out_lap=false`; among qualifying records it selects the shortest time. OpenF1 does not establish official lap validity or personal-best status, so responses mark validity as `unknown`. The chart's x coordinate is elapsed time from the first returned timestamp in each trace; it is not circuit distance or position. Lines connect observed samples and are not resampled. The peak speed-gap insight pairs each speed-valid sample with the nearest speed-valid sample from the other trace within the common elapsed-time span, in both directions; pairs more than 0.15 seconds apart are excluded. It never interpolates or extrapolates and reports elapsed-time separation, not same-position comparison. A 429 response is returned as HTTP 429 with `Retry-After` when supplied; wait before trying again. The frontend does not substitute telemetry when the API fails.
-
-To validate the real 2024 British GP qualifying feed, run this separately from ordinary tests:
-
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m scripts.validate_fastf1
-```
-
-FastF1's cache is configured to `data/cache/` at the repository root and is ignored by Git. The validation script selects each driver's fastest accurate, personal-best lap, reports the available telemetry and data-quality checks, then computes `NOR time - VER time` (positive means VER's selected lap is faster). It retains the original car-data samples and does not align telemetry by row number or interpolate traces.
-
-## Checks
-
-```powershell
-cd backend
-.\.venv\Scripts\python -m pytest
-cd ..\frontend
+cd D:\TRACE\frontend
 npm run lint
 npm run typecheck
 npm run build
 ```
 
-## Data, cache, and provenance
+The backend suite covers normalization, candidate selection, comparison behavior, error handling, and the health endpoint with offline fixtures/mocks. Frontend lint and typecheck validate source quality and types; the production build checks Next.js compilation. The live OpenF1 validation commands are intentionally opt-in and documented in `docs/data-validation.md`, not part of pytest.
 
-OpenF1 is the current API source for historical sessions (the provider documents unauthenticated historical data from 2023 onward). The response reports OpenF1 and the local fetch time; OpenF1 source freshness metadata is not available. FastF1 remains separate and configures its cache under the repository's ignored `data/cache/` directory. TRACE discloses its data source and distinguishes unavailable data from measurements. No upstream data terms or redistribution rights have been assessed yet; review the provider terms before any public deployment.
+For an isolated live OpenF1 probe, use the validation script described in the data-validation document. It makes external requests and must not be treated as an ordinary test.
 
-## Known limitations
+## Roadmap
 
-- Session and driver selectors are populated from provider metadata. Data availability varies by year/session; empty results and provider errors are shown without substituting the validated Silverstone session.
-- Candidate validity and personal-best status remain unknown. The values should not be described as official fastest laps.
-- The dashboard compares speed over timestamp-derived elapsed time only. Calibrated distance, circuit-position alignment, and distance-based telemetry are not supported.
-- FastF1's 2024 session load previously resolved metadata but failed on upstream HTTP 401/404 timing requests; that access issue remains unresolved and FastF1 is not the API's current source.
-- The API's real live end-to-end result and current frontend validation/build state are recorded in [`docs/data-validation.md`](docs/data-validation.md).
-- Windows Application Control blocks Next.js's native compiler here; use the documented WASM fallback in this environment.
-- `npm install` reported seven dependency advisories. `npm audit` could not retrieve advisory details because the registry security endpoint could not resolve, so severity and affected packages have not been independently confirmed.
+Possible future work, not currently implemented:
 
-Milestone 7 controlled live verification also retrieved VER's explicitly selected alternative lap 2 through the OpenF1 adapter and confirmed that its response retained manual selection mode and matching telemetry. Exact figures, request count, offline test coverage and the absence of browser interaction testing are recorded in [docs/data-validation.md](docs/data-validation.md).
+- Validate a trustworthy circuit-distance coordinate before offering distance-aligned comparisons.
+- Explore cumulative time-delta views with clearly documented alignment assumptions.
+- Add further evidence-backed historical telemetry analysis.
+- Assess provider terms and deployment requirements before considering a public deployment.
 
-## Milestone 8: plain-English comparison insights
+## Project status and acknowledgements
 
-The results now include a short “What this means” explanation built from the active comparison response. It names the recorded candidate lap with the shorter time using the existing `driver_b - driver_a` signed delta, lists both selected lap numbers/times and whether each was manually or automatically selected, and handles a tie or inconsistent/unavailable timing without guessing. It reiterates that official lap validity and personal-best status are unverified.
-
-When the user inspects telemetry, TRACE describes the actual nearest sample in each driver's independently elapsed trace: recorded speed, throttle and brake readings, gear and engine RPM. Missing fields are stated as unavailable. These readings are observations only; throttle is not described as proof of acceleration.
-
-The speed-gap wording reuses the existing largest nearby sample-pair calculation and reports both speeds, elapsed offsets, and separation. If no valid pair exists, it explains the unavailable state in plain language. It continues to label the comparison as elapsed-time based and not circuit-position aligned. No live provider request was needed for these presentation changes.
+TRACE currently runs locally and is **not publicly deployed**. It uses the [OpenF1 API](https://openf1.org/docs/) and retains [FastF1](https://docs.fastf1.dev/) for a separate adapter/diagnostic path. The app is built with [Next.js](https://nextjs.org/docs), [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/docs/), [FastAPI](https://fastapi.tiangolo.com/), and [Uvicorn](https://www.uvicorn.org/). Provider names and marks belong to their respective owners; TRACE is an independent, non-affiliated project.

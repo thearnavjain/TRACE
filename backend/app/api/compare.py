@@ -98,5 +98,3 @@ def compare(
     if result.provenance.fetched_at:
         response.headers["Cache-Control"] = "no-store"
     return result
-
-\n

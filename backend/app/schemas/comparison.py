@@ -96,5 +96,3 @@ class ComparisonResponse(BaseModel):
     speed_difference_insight: SpeedDifferenceInsight
     provenance: DataProvenanceSummary
     warnings: list[str]
-
-\n
