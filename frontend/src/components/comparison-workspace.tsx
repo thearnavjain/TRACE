@@ -439,7 +439,7 @@ export function ComparisonWorkspace() {
   return <main className="app-shell">
     <header className="topbar">
       <Link className="wordmark" href="/" aria-label="TRACE home">TRACE<span>.</span></Link>
-      <div className="brand-subtitle">HISTORICAL TELEMETRY / DRIVER ANALYSIS</div>
+      <div className="brand-subtitle">Telemetry &amp; Race Analysis for Competitive Engineering</div>
       <div className="topbar-right"><span className="session-tag">OPENF1 · HISTORICAL</span><ApiStatus /></div>
     </header>
 

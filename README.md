@@ -1,6 +1,6 @@
 # TRACE — Telemetry & Race Analysis for Competitive Engineering
 
-**Explore historical Formula 1 telemetry and compare drivers' recorded candidate laps.** TRACE is a locally run analysis platform that turns timing and car-data samples into an interactive, clearly qualified comparison.
+**TRACE (Telemetry & Race Analysis for Competitive Engineering)** is a historical Formula 1 telemetry analysis and driver-comparison platform. It turns recorded lap timing and car-data samples into an interactive comparison, with clear explanations of what the data does and does not establish.
 
 ## Screenshots
 
