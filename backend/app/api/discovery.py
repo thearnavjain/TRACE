@@ -34,6 +34,19 @@ def _provider_error(exc: Exception) -> HTTPException:
                 detail={"code": "provider_rate_limited", "message": "OpenF1 rate limit reached. Wait before requesting metadata again."},
                 headers={"Retry-After": exc.retry_after} if exc.retry_after else None,
             )
+        if exc.status_code == 401:
+            return HTTPException(
+                502,
+                detail={
+                    "code": "provider_access_restricted",
+                    "message": (
+                        f"OpenF1 rejected the historical request to {exc.endpoint} with HTTP 401. "
+                        "Historical access is normally unauthenticated, but OpenF1 may restrict "
+                        "historical queries during an active live-session window. Try again after "
+                        "the session window; TRACE has no OpenF1 credentials configured."
+                    ),
+                },
+            )
         return HTTPException(502, detail={"code": "provider_http_error", "message": f"OpenF1 returned HTTP {exc.status_code} from {exc.endpoint}."})
     if isinstance(exc, HistoricalDataRequestError):
         return HTTPException(502, detail={"code": "provider_request_failed", "message": f"OpenF1 request failed ({exc.error_type})."})

@@ -326,6 +326,18 @@ Final commands for this pass:
 - From `frontend`: `npm run lint` — passed; `npm run typecheck` — passed.
 - From `frontend` on Windows, with `NEXT_TEST_WASM=1` and `NEXT_TEST_WASM_DIR` set to the installed `@next/swc-wasm-nodejs` directory: `npm run build` — passed. Next printed its Windows WASM experimental-option notice but completed compilation and static generation.
 
+## OpenF1 HTTP 401 during the 2026 United States Grand Prix window
+
+Investigation date: 2026-10-24. The deployed dashboard reported `OpenF1 returned HTTP 401 from /meetings`. Render logs were not accessible from the available tools, so the deployment's internal request log could not be inspected.
+
+The adapter uses `https://api.openf1.org/v1`, sends no authorization header, reads no OpenF1 credential environment variable, and makes `GET /meetings?year=2024` using the documented filter. A single direct request from this environment to that exact URL returned HTTP 401, `Content-Type: application/octet-stream, application/json`, and no `Retry-After`. The response body was not captured. This reproduces the upstream rejection outside Render and makes a Render-only missing-variable or CORS issue unlikely. It does not reveal the provider's specific internal reason.
+
+OpenF1's [current documentation](https://openf1.org/docs/) still says historical data from 2023 onward is available without authentication. Its [official service page](https://openf1.org/) says data is treated as live from 30 minutes before a session through 30 minutes after it. In [OpenF1 discussion #328](https://github.com/br-g/openf1/discussions/328), the project maintainer explains that the public API restricts unauthenticated access during live sessions and that the restriction also affects historical queries. At the request time (17:17 UTC), the official [2026 United States GP schedule](https://www.formula1.com/en/racing/2026/united-states) placed FP3 at 17:30 UTC (12:30 local), so the request fell inside OpenF1's stated 30-minute pre-session live window. The timing and maintainer explanation strongly support a temporary event-window access restriction as the cause. The exact denial reason from the missing response body and Render logs remains unverified.
+
+The API now maps upstream HTTP 401 to `provider_access_restricted` (HTTP 502 to TRACE callers) with a message explaining the likely live-session restriction and advising users to try again after the session window. It does not convert the failure into empty metadata, add credentials, retry 401s, or change comparison behavior. Offline endpoint tests verify that both session discovery and comparison preserve this explicit failure.
+
+No OpenF1 credential is currently needed or configured for ordinary historical access according to the provider documentation. During a live window, OpenF1 may require authenticated access; TRACE has not implemented or tested such access, and no credential is requested or included. Because the timed window should expire, the first next check should be one session-discovery request after the live window has ended. If that still returns 401, check the provider's current status/support; do not repeatedly retry. A real comparison after this investigation remains unverified.
+
 ## Milestone 8: evidence-backed plain-English insights
 
 ### What the lap-time explanation uses

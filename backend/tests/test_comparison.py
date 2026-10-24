@@ -307,6 +307,42 @@ def test_metadata_rate_limit_preserves_retry_after_and_year_validation_is_local(
     assert unsupported.status_code == 422
 
 
+def test_session_discovery_explains_upstream_401_without_calling_it_empty_data():
+    class AccessRestricted(FakeProvider):
+        def get_meetings(self, year):
+            raise HistoricalDataHTTPError("/meetings", 401, attempts=1)
+
+    app.dependency_overrides[get_provider] = lambda: AccessRestricted()
+    try:
+        response = TestClient(app).get("/api/sessions", params={"year": 2024})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "provider_access_restricted"
+    assert "HTTP 401" in response.json()["detail"]["message"]
+    assert "active live-session window" in response.json()["detail"]["message"]
+    assert "credentials configured" in response.json()["detail"]["message"]
+
+
+def test_comparison_maps_upstream_401_to_access_restricted_error():
+    class AccessRestricted(FakeProvider):
+        def get_session(self, key):
+            raise HistoricalDataHTTPError("/sessions", 401, attempts=1)
+
+    app.dependency_overrides[get_provider] = lambda: AccessRestricted()
+    try:
+        response = TestClient(app).get("/api/compare", params={
+            "session_key": 9554, "driver_a": "VER", "driver_b": "NOR",
+        })
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "provider_access_restricted"
+    assert "HTTP 401" in response.json()["detail"]["message"]
+
+
 def test_manual_candidate_laps_override_automatic_selection_and_are_reported():
     class ManualChoices(FakeProvider):
         def get_laps(self, key, driver_number=None):

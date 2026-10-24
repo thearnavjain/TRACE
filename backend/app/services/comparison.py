@@ -61,6 +61,17 @@ def _provider_error(exc: Exception) -> ComparisonError:
     if isinstance(exc, HistoricalDataHTTPError):
         if exc.status_code == 429:
             return ComparisonError(429, "provider_rate_limited", "OpenF1 rate limit reached. Wait before requesting another comparison.", exc.retry_after)
+        if exc.status_code == 401:
+            return ComparisonError(
+                502,
+                "provider_access_restricted",
+                (
+                    f"OpenF1 rejected the historical request to {exc.endpoint} with HTTP 401. "
+                    "Historical access is normally unauthenticated, but OpenF1 may restrict "
+                    "historical queries during an active live-session window. Try again after "
+                    "the session window; TRACE has no OpenF1 credentials configured."
+                ),
+            )
         return ComparisonError(502, "provider_http_error", f"OpenF1 returned HTTP {exc.status_code} from {exc.endpoint}.")
     if isinstance(exc, HistoricalDataRequestError):
         return ComparisonError(502, "provider_request_failed", f"OpenF1 request failed ({exc.error_type}).")
